@@ -13,10 +13,12 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 class FileLoader:
     """Класс для загрузки и обработки файлов разных форматов"""
 
-    def __init__(self):
+    def __init__(self, chunk_size: int = None, chunk_overlap: int = None):
+        from config import Config
+
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200,
+            chunk_size=chunk_size or Config.CHUNK_SIZE,
+            chunk_overlap=chunk_overlap or Config.CHUNK_OVERLAP,
             length_function=len,
         )
 

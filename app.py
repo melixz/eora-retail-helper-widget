@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from rag_chain import EoraRAGChain
+from core.rag_chain import EoraRAGChain
 
 
 @st.cache_resource
