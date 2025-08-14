@@ -23,33 +23,51 @@ class WebCrawler:
 
     def crawl_page(self, url: str) -> Dict[str, Any]:
         """Парсинг одной страницы"""
-        try:
-            response = self.session.get(url, timeout=10)
-            response.raise_for_status()
+        max_retries = 3
+        timeout = 30
 
-            soup = BeautifulSoup(response.content, "html.parser")
+        for attempt in range(max_retries):
+            try:
+                response = self.session.get(url, timeout=timeout)
+                response.raise_for_status()
 
-            title = soup.find("title")
-            title_text = title.get_text().strip() if title else ""
+                soup = BeautifulSoup(response.content, "html.parser")
 
-            for script in soup(["script", "style"]):
-                script.decompose()
+                title = soup.find("title")
+                title_text = title.get_text().strip() if title else ""
 
-            text_content = soup.get_text()
-            lines = (line.strip() for line in text_content.splitlines())
-            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-            text = " ".join(chunk for chunk in chunks if chunk)
+                for script in soup(["script", "style"]):
+                    script.decompose()
 
-            return {
-                "url": url,
-                "title": title_text,
-                "content": text,
-                "metadata": {"source": "web", "url": url, "title": title_text},
-            }
+                text_content = soup.get_text()
+                lines = (line.strip() for line in text_content.splitlines())
+                chunks = (
+                    phrase.strip() for line in lines for phrase in line.split("  ")
+                )
+                text = " ".join(chunk for chunk in chunks if chunk)
 
-        except Exception as e:
-            ErrorHandler.log_warning(f"Ошибка при парсинге {url}: {e}")
-            return None
+                if len(text.strip()) < 50:
+                    ErrorHandler.log_warning(f"Мало контента на странице {url}")
+                    return None
+
+                return {
+                    "url": url,
+                    "title": title_text,
+                    "content": text,
+                    "metadata": {"source": "web", "url": url, "title": title_text},
+                }
+
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    ErrorHandler.log_warning(
+                        f"Попытка {attempt + 1} не удалась для {url}: {e}. Повторяем..."
+                    )
+                    time.sleep(2**attempt)
+                else:
+                    ErrorHandler.log_warning(
+                        f"Не удалось загрузить {url} после {max_retries} попыток: {e}"
+                    )
+                    return None
 
     def get_links(self, url: str) -> List[str]:
         """Получение ссылок со страницы"""
@@ -91,8 +109,15 @@ class WebCrawler:
         pages_data = []
         urls_to_visit = [self.base_url]
 
+        # Добавляем специфичные URL из файла
+        specific_urls = self._load_specific_urls()
+        urls_to_visit.extend(specific_urls)
+
         ErrorHandler.log_info(
             f"Начинаем парсинг сайта {self.base_url}, максимум {max_pages} страниц"
+        )
+        ErrorHandler.log_info(
+            f"Добавлено {len(specific_urls)} специфичных URL для парсинга"
         )
 
         while urls_to_visit and len(pages_data) < max_pages:
@@ -107,10 +132,30 @@ class WebCrawler:
             if page_data:
                 pages_data.append(page_data)
 
-                new_links = self.get_links(url)
-                urls_to_visit.extend(new_links)
+                # Получаем новые ссылки только с основной страницы
+                if url == self.base_url:
+                    new_links = self.get_links(url)
+                    urls_to_visit.extend(new_links)
 
             time.sleep(self.delay)
 
         ErrorHandler.log_info(f"Парсинг завершен. Обработано {len(pages_data)} страниц")
         return pages_data
+
+    def _load_specific_urls(self) -> List[str]:
+        """Загрузка специфичных URL из файла"""
+        urls = []
+        try:
+            import os
+
+            urls_file = os.path.join("data", "eora_cases_urls.txt")
+            if os.path.exists(urls_file):
+                with open(urls_file, "r", encoding="utf-8") as f:
+                    urls = [line.strip() for line in f if line.strip()]
+                ErrorHandler.log_info(f"Загружено {len(urls)} URL из файла {urls_file}")
+            else:
+                ErrorHandler.log_warning(f"Файл {urls_file} не найден")
+        except Exception as e:
+            ErrorHandler.log_warning(f"Ошибка при загрузке URL из файла: {e}")
+
+        return urls

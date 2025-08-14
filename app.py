@@ -11,8 +11,9 @@ Config.setup_logging()
 @st.cache_resource
 def load_rag_chain():
     """Инициализация и кэширование RAG chain"""
+    Config.validate()
     chain = EoraRAGChain()
-    data_path = os.getenv("DATA_PATH", "./data")
+    data_path = Config.DATA_PATH
 
     with st.spinner("Загрузка документов..."):
         doc_count = chain.load_documents(data_path, include_web=True)
@@ -22,6 +23,21 @@ def load_rag_chain():
             st.warning("Документы не найдены, работаем только с веб-данными")
 
     return chain
+
+
+@st.cache_data(ttl=3600)
+def get_example_questions():
+    """Кэшированные примеры вопросов"""
+    return [
+        "Что вы можете сделать для ритейлеров?",
+        "Расскажите про HR-бота для Магнита",
+        "Какие проекты вы делали для KazanExpress?",
+        "Что такое поиск по картинкам для одежды?",
+        "Какие чат-боты вы разрабатывали?",
+        "Расскажите про проекты с компьютерным зрением",
+        "Какие решения для промышленности вы создавали?",
+        "Что вы делали для Dodo Pizza?",
+    ]
 
 
 def format_sources(sources, complexity_level):
@@ -81,9 +97,32 @@ def main():
 
         st.markdown("---")
         st.markdown("**Примеры вопросов:**")
-        st.markdown("- Что вы можете сделать для ритейлеров?")
-        st.markdown("- Какие проекты вы делали для Магнита?")
-        st.markdown("- Расскажите о ваших AI решениях")
+        example_questions = get_example_questions()
+        for i, question in enumerate(example_questions):
+            if st.button(question, key=f"example_{i}", use_container_width=True):
+                st.session_state.example_question = question
+                st.rerun()
+
+        st.markdown("---")
+        st.markdown("**Статистика:**")
+        if "messages" in st.session_state:
+            st.metric("Сообщений в чате", len(st.session_state.messages))
+
+        # Мониторинг производительности
+        try:
+            from utils.performance import PerformanceMonitor
+
+            memory_usage = PerformanceMonitor.track_memory_usage()
+            if memory_usage:
+                st.metric("Память (MB)", f"{memory_usage:.1f}")
+        except Exception:
+            pass
+
+        # Кнопка очистки чата
+        if st.button("🗑️ Очистить чат", use_container_width=True):
+            if "messages" in st.session_state:
+                st.session_state.messages = []
+            st.rerun()
 
     with col1:
         st.subheader("Чат")
@@ -101,6 +140,13 @@ def main():
                                 "source_file", source.get("url", "Неизвестный источник")
                             )
                             st.write(f"**[{i}]** {source_name}")
+
+        # Обработка примера вопроса
+        if "example_question" in st.session_state:
+            prompt = st.session_state.example_question
+            del st.session_state.example_question
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            st.rerun()
 
         if prompt := st.chat_input("Ваш вопрос:"):
             st.session_state.messages.append({"role": "user", "content": prompt})

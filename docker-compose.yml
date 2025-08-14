@@ -1,0 +1,15 @@
+services:
+  eora-rag-service:
+    build: .
+    container_name: eora-rag-app
+    ports:
+      - "8501:8501"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-gpt-3.5-turbo}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENABLE_WEB_CRAWLING=${ENABLE_WEB_CRAWLING:-false}
+      - WEB_CRAWL_TIMEOUT=${WEB_CRAWL_TIMEOUT:-30}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

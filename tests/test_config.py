@@ -13,7 +13,8 @@ class TestConfig:
         """Тест успешной валидации"""
         assert Config.validate() is True
 
-    @patch.dict(os.environ, {}, clear=True)
+    @patch("core.config.Config.OPENAI_API_KEY", None)
+    @patch("core.config.Config.MODEL_PROVIDER", "openai")
     def test_validate_missing_openai_key(self):
         """Тест валидации без OpenAI ключа"""
         with pytest.raises(ConfigurationError) as exc_info:
@@ -27,16 +28,30 @@ class TestConfig:
         """Тест успешной валидации с GigaChat"""
         assert Config.validate() is True
 
-    @patch.dict(os.environ, {"CHUNK_SIZE": "0"})
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test-key", "CHUNK_SIZE": "0"})
     def test_validate_invalid_chunk_size(self):
         """Тест валидации с неверным размером чанка"""
+        # Сбрасываем кэшированные значения конфигурации
+        from importlib import reload
+        import core.config
+
+        reload(core.config)
+        from core.config import Config
+
         with pytest.raises(ConfigurationError) as exc_info:
             Config.validate()
         assert "CHUNK_SIZE должен быть положительным числом" in str(exc_info.value)
 
-    @patch.dict(os.environ, {"CHUNK_OVERLAP": "-1"})
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test-key", "CHUNK_OVERLAP": "-1"})
     def test_validate_negative_chunk_overlap(self):
         """Тест валидации с отрицательным перекрытием чанков"""
+        # Сбрасываем кэшированные значения конфигурации
+        from importlib import reload
+        import core.config
+
+        reload(core.config)
+        from core.config import Config
+
         with pytest.raises(ConfigurationError) as exc_info:
             Config.validate()
         assert "CHUNK_OVERLAP не может быть отрицательным" in str(exc_info.value)

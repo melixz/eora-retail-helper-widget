@@ -1,7 +1,7 @@
 import os
 from typing import List, Dict, Any
 from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from utils.file_loader import FileLoader
@@ -11,7 +11,10 @@ from utils.error_handler import (
     handle_document_load_errors,
     handle_llm_errors,
 )
+from utils.performance import measure_time, with_performance_monitoring
+from utils.validation import InputValidator, ResponseValidator
 from core.config import Config
+from core.llm_providers import LLMFactory
 
 
 class EoraRAGChain:
@@ -22,11 +25,13 @@ class EoraRAGChain:
         self.documents = []
         self.vectorstore = None
         self.embeddings = OpenAIEmbeddings()
-        self.llm = ChatOpenAI(model=Config.MODEL_NAME, temperature=0.1)
+        self.llm_provider = LLMFactory.create_provider()
+        self.llm = self.llm_provider.get_llm()
         self.file_loader = FileLoader()
         self.web_crawler = WebCrawler(delay=Config.CRAWL_DELAY)
 
     @handle_document_load_errors
+    @with_performance_monitoring
     def load_documents(self, data_path: str, include_web: bool = True):
         """Загрузка и индексация документов"""
         all_documents = []
@@ -37,7 +42,7 @@ class EoraRAGChain:
             all_documents.extend(file_chunks)
             ErrorHandler.log_info(f"Загружено {len(file_chunks)} чанков из файлов")
 
-        if include_web:
+        if include_web and Config.ENABLE_WEB_CRAWLING:
             ErrorHandler.log_info("Начинаем парсинг веб-страниц")
             web_data = ErrorHandler.safe_execute(
                 lambda: self.web_crawler.crawl_site(max_pages=Config.CRAWL_MAX_PAGES),
@@ -51,6 +56,8 @@ class EoraRAGChain:
                     )
                     all_documents.append(doc)
             ErrorHandler.log_info(f"Загружено {len(web_data)} веб-страниц")
+        elif not Config.ENABLE_WEB_CRAWLING:
+            ErrorHandler.log_info("Веб-краулинг отключен в конфигурации")
 
         if all_documents:
             ErrorHandler.log_info(
@@ -72,12 +79,15 @@ class EoraRAGChain:
         return self.vectorstore.similarity_search(query, k=k)
 
     @handle_llm_errors
+    @measure_time
     def generate_answer(
         self, query: str, complexity_level: str = "easy"
     ) -> Dict[str, Any]:
         """Генерация ответа с учетом уровня сложности"""
-        if not query.strip():
-            raise ValueError("Пустой запрос")
+        InputValidator.validate_query(query)
+        InputValidator.validate_complexity_level(complexity_level)
+
+        query = InputValidator.sanitize_query(query)
 
         ErrorHandler.log_info(f"Генерация ответа для запроса: {query[:50]}...")
         relevant_docs = self.search_relevant_docs(query)
@@ -107,11 +117,17 @@ class EoraRAGChain:
         response = self.llm.invoke(messages)
 
         ErrorHandler.log_info("Ответ успешно сгенерирован")
-        return {
+
+        result = {
             "answer": response.content,
             "sources": sources,
             "complexity_level": complexity_level,
         }
+
+        ResponseValidator.validate_response(result)
+        ResponseValidator.validate_sources(sources)
+
+        return result
 
     def _prepare_context_with_references(self, docs: List[Document]) -> str:
         """Подготовка контекста с пронумерованными ссылками"""

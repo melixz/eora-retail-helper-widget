@@ -23,6 +23,9 @@ class Config:
     CRAWL_MAX_PAGES = int(os.getenv("CRAWL_MAX_PAGES", "20"))
     CRAWL_DELAY = float(os.getenv("CRAWL_DELAY", "1.0"))
 
+    ENABLE_WEB_CRAWLING = os.getenv("ENABLE_WEB_CRAWLING", "true").lower() == "true"
+    WEB_CRAWL_TIMEOUT = int(os.getenv("WEB_CRAWL_TIMEOUT", "30"))
+
     SEARCH_K = int(os.getenv("SEARCH_K", "5"))
 
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
