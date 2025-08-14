@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 from typing import List, Dict, Any
 from urllib.parse import urljoin, urlparse
 import time
+from utils.error_handler import ErrorHandler, handle_webcrawler_errors
 
 
 class WebCrawler:
@@ -18,6 +19,7 @@ class WebCrawler:
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             }
         )
+        ErrorHandler.log_info(f"Инициализирован WebCrawler для {base_url}")
 
     def crawl_page(self, url: str) -> Dict[str, Any]:
         """Парсинг одной страницы"""
@@ -46,7 +48,7 @@ class WebCrawler:
             }
 
         except Exception as e:
-            print(f"Ошибка при парсинге {url}: {e}")
+            ErrorHandler.log_warning(f"Ошибка при парсинге {url}: {e}")
             return None
 
     def get_links(self, url: str) -> List[str]:
@@ -68,7 +70,7 @@ class WebCrawler:
             return links
 
         except Exception as e:
-            print(f"Ошибка при получении ссылок с {url}: {e}")
+            ErrorHandler.log_warning(f"Ошибка при получении ссылок с {url}: {e}")
             return []
 
     def is_valid_url(self, url: str) -> bool:
@@ -83,10 +85,15 @@ class WebCrawler:
             )
         )
 
+    @handle_webcrawler_errors
     def crawl_site(self, max_pages: int = 50) -> List[Dict[str, Any]]:
         """Парсинг всего сайта"""
         pages_data = []
         urls_to_visit = [self.base_url]
+
+        ErrorHandler.log_info(
+            f"Начинаем парсинг сайта {self.base_url}, максимум {max_pages} страниц"
+        )
 
         while urls_to_visit and len(pages_data) < max_pages:
             url = urls_to_visit.pop(0)
@@ -105,4 +112,5 @@ class WebCrawler:
 
             time.sleep(self.delay)
 
+        ErrorHandler.log_info(f"Парсинг завершен. Обработано {len(pages_data)} страниц")
         return pages_data

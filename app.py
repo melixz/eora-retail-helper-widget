@@ -1,6 +1,11 @@
 import streamlit as st
 import os
 from core.rag_chain import EoraRAGChain
+from core.config import Config
+from core.exceptions import ConfigurationError, DocumentLoadError, LLMError
+from utils.error_handler import ErrorHandler
+
+Config.setup_logging()
 
 
 @st.cache_resource
@@ -47,8 +52,17 @@ def main():
 
     try:
         rag_chain = load_rag_chain()
+    except ConfigurationError as e:
+        st.error(f"Ошибка конфигурации: {e}")
+        ErrorHandler.log_and_raise(e, "Configuration error")
+        st.stop()
+    except DocumentLoadError as e:
+        st.error(f"Ошибка загрузки документов: {e}")
+        ErrorHandler.log_and_raise(e, "Document load error")
+        st.stop()
     except Exception as e:
-        st.error(f"Ошибка при инициализации: {e}")
+        st.error(f"Неожиданная ошибка при инициализации: {e}")
+        ErrorHandler.log_and_raise(e, "Unexpected initialization error")
         st.stop()
 
     col1, col2 = st.columns([3, 1])
@@ -124,9 +138,19 @@ def main():
                                     )
                                     st.write(f"**[{i}]** {source_name}")
 
-                    except Exception as e:
-                        error_msg = f"Ошибка при генерации ответа: {str(e)}"
+                    except LLMError as e:
+                        error_msg = f"Ошибка LLM: {str(e)}"
                         st.error(error_msg)
+                        ErrorHandler.log_and_raise(e, "LLM error")
+                        st.session_state.messages.append(
+                            {"role": "assistant", "content": error_msg, "sources": []}
+                        )
+                    except Exception as e:
+                        error_msg = f"Неожиданная ошибка при генерации ответа: {str(e)}"
+                        st.error(error_msg)
+                        ErrorHandler.log_and_raise(
+                            e, "Unexpected answer generation error"
+                        )
                         st.session_state.messages.append(
                             {"role": "assistant", "content": error_msg, "sources": []}
                         )

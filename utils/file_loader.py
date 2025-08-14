@@ -14,7 +14,7 @@ class FileLoader:
     """Класс для загрузки и обработки файлов разных форматов"""
 
     def __init__(self, chunk_size: int = None, chunk_overlap: int = None):
-        from config import Config
+        from core.config import Config
 
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size or Config.CHUNK_SIZE,
@@ -39,16 +39,23 @@ class FileLoader:
                 raise ValueError(f"Неподдерживаемый формат файла: {file_extension}")
 
             documents = loader.load()
+
+            if not documents:
+                return []
+
             chunks = self.text_splitter.split_documents(documents)
 
             for chunk in chunks:
                 chunk.metadata["source_file"] = os.path.basename(file_path)
                 chunk.metadata["file_path"] = file_path
+                chunk.metadata["file_type"] = file_extension
 
             return chunks
 
         except Exception as e:
-            print(f"Ошибка при загрузке файла {file_path}: {e}")
+            from utils.error_handler import ErrorHandler
+
+            ErrorHandler.log_and_raise(e, f"Загрузка файла {file_path}")
             return []
 
     def load_directory(self, directory_path: str) -> List[Dict[str, Any]]:

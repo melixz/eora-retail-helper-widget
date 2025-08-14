@@ -1,5 +1,7 @@
 import os
+import logging
 from dotenv import load_dotenv
+from core.exceptions import ConfigurationError
 
 load_dotenv()
 
@@ -23,13 +25,41 @@ class Config:
 
     SEARCH_K = int(os.getenv("SEARCH_K", "5"))
 
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
     @classmethod
     def validate(cls):
         """Валидация конфигурации"""
+        errors = []
+
         if not cls.OPENAI_API_KEY and cls.MODEL_PROVIDER == "openai":
-            raise ValueError("OPENAI_API_KEY не установлен")
+            errors.append("OPENAI_API_KEY не установлен")
 
         if not cls.GIGACHAT_API_KEY and cls.MODEL_PROVIDER == "gigachat":
-            raise ValueError("GIGACHAT_API_KEY не установлен")
+            errors.append("GIGACHAT_API_KEY не установлен")
+
+        if cls.CHUNK_SIZE <= 0:
+            errors.append("CHUNK_SIZE должен быть положительным числом")
+
+        if cls.CHUNK_OVERLAP < 0:
+            errors.append("CHUNK_OVERLAP не может быть отрицательным")
+
+        if cls.CRAWL_MAX_PAGES <= 0:
+            errors.append("CRAWL_MAX_PAGES должен быть положительным числом")
+
+        if cls.SEARCH_K <= 0:
+            errors.append("SEARCH_K должен быть положительным числом")
+
+        if errors:
+            raise ConfigurationError(f"Ошибки конфигурации: {'; '.join(errors)}")
 
         return True
+
+    @classmethod
+    def setup_logging(cls):
+        """Настройка логирования"""
+        logging.basicConfig(
+            level=getattr(logging, cls.LOG_LEVEL.upper()),
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            handlers=[logging.StreamHandler(), logging.FileHandler("eora_rag.log")],
+        )
